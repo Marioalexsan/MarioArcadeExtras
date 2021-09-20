@@ -13,13 +13,17 @@ namespace Murio
 {
     public class DrainAbilitySpell : EnemyAbilitySpell
     {
-        public int FlatEPDrain { get; } = 25;
+        public int FlatEPDrain { get; } = 10;
 
         public float RelativeEPDrain { get; } = 0.5f;
+
+        public float DebuffRadius { get; } = 45;
 
         public override void OnDestroy()
         {
             AbilityIcon.bToBeDestroyed = true;
+
+            RadiusIndicator.bToBeDestroyed = true;
 
             if (NetUtils.IsLocalOrServer)
             {
@@ -71,6 +75,23 @@ namespace Murio
             {
                 bToBeDestroyed = true;
             }
+            else
+            {
+                foreach (PlayerView player in Globals.Game.dixPlayers.Values)
+                {
+                    if (Vector2.Distance(player.xEntity.xTransform.v2Pos, Owner.xTransform.v2Pos) <= DebuffRadius)
+                    {
+                        BaseStats stats = player.xEntity.xBaseStats;
+
+                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffectID("DrainDebuff_ASPD"), new BaseStats.EBuffFloat(10, -12, EquipmentInfo.StatEnum.ASPD, true));
+                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffectID("DrainDebuff_CSPD"), new BaseStats.EBuffFloat(10, -24, EquipmentInfo.StatEnum.CSPD, true));
+                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffectID("DrainDebuff_EPReg"), new BaseStats.EBuffFloat(10, -65, EquipmentInfo.StatEnum.EPRegen, true));
+                        stats.AddPercentageMoveSpeedDeBuff(new BaseStats.BuffFloat(10, 0.7f));
+                    }
+                } 
+
+                UpdateEffects();
+            }
         }
 
         private bool _foundEnemy = false;
@@ -79,16 +100,17 @@ namespace Murio
 
         private void StartSpell()
         {
-            CreateAbilityIcon(Color.Blue);
+            CreateAbilityIcon();
 
-            Owner.xBaseStats.AddPercentageMoveSpeedBuff(new BaseStats.BuffFloat(int.MaxValue, 1.15f));
-
-            foreach (var animation in Owner.xRenderComponent.dixAnimations.Values)
-            {
-                animation.fInnateTimeWarp *= 1.25f;
-            }
+            CreateRadiusIndicator();
         }
 
+        private void UpdateEffects()
+        {
+            EditAbilityIcon(Color.Blue, 1f);
+
+            EditRadiusIndicator(Color.Blue, 0.15f, DebuffRadius);
+        }
 
         public static DrainAbilitySpell SpellBuilder(int powerLevel, Level.WorldRegion worldRegion)
         {

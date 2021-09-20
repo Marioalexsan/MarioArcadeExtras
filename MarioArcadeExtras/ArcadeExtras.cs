@@ -69,6 +69,10 @@ namespace Murio
 
         private Dictionary<string, SpellCodex.SpellTypes> Spells = new Dictionary<string, SpellCodex.SpellTypes>();
 
+        private Dictionary<string, BaseStats.StatusEffectSource> StatusEffects = new Dictionary<string, BaseStats.StatusEffectSource>();
+
+        private Dictionary<string, PinCodex.PinType> Pins = new Dictionary<string, PinCodex.PinType>();
+
         public RogueLikeMode.Perks GetPerkID(string modID)
         {
             if (Perks.ContainsKey(modID))
@@ -91,6 +95,22 @@ namespace Murio
                 return Spells[modID];
 
             return SpellCodex.SpellTypes.NULL;
+        }
+        
+        public BaseStats.StatusEffectSource GetStatusEffectID(string modID)
+        {
+            if (StatusEffects.ContainsKey(modID))
+                return StatusEffects[modID];
+
+            return BaseStats.StatusEffectSource.SlowLv1;
+        }
+
+        public PinCodex.PinType GetPinID(string modID)
+        {
+            if (Pins.ContainsKey(modID))
+                return Pins[modID];
+
+            return PinCodex.PinType.EmptySlot;
         }
 
         public override void Load()
@@ -261,9 +281,9 @@ namespace Murio
             Curses["Curse01"] = CreateTreatOrCurse(new TreatCurseConfig("Curse01")
             {
                 Name = "START Treaty",
-                Description = "Most enemies are shielded at room start. After a delay, shields deactivate one by one.",
+                Description = "Most enemies spawn with a shield. Shields deactivate after a delay.",
                 IsCurse = true,
-                ScoreModifier = 0.35f,
+                ScoreModifier = 0.25f,
                 TexturePath = AssetPath + "RogueLike/Curses/STARTTreaty"
             });
 
@@ -272,8 +292,17 @@ namespace Murio
                 Name = "Specialists",
                 Description = "Some enemies gain special abilities.",
                 IsCurse = true,
-                ScoreModifier = 0.35f,
+                ScoreModifier = 0.20f,
                 TexturePath = AssetPath + "RogueLike/Curses/Specialists"
+            });
+            
+            Curses["Curse03"] = CreateTreatOrCurse(new TreatCurseConfig("Curse03")
+            {
+                Name = "Game Over Speedrun",
+                Description = "Most enemies move and attack faster.",
+                IsCurse = true,
+                ScoreModifier = 0.30f,
+                TexturePath = AssetPath + "RogueLike/Curses/HasteCurse"
             });
 
             Spells["Spell001"] = CreateSpell(new SpellConfig("Spell001")
@@ -295,6 +324,34 @@ namespace Murio
             {
                 Builder = ChaosAbilitySpell.SpellBuilder
             });
+
+            StatusEffects["DrainDebuff_ASPD"] = CreateStatusEffect(new StatusEffectConfig("DrainDebuff_ASPD"));
+
+            StatusEffects["DrainDebuff_CSPD"] = CreateStatusEffect(new StatusEffectConfig("DrainDebuff_CSPD"));
+
+            StatusEffects["DrainDebuff_EPReg"] = CreateStatusEffect(new StatusEffectConfig("DrainDebuff_EPReg"));
+
+            Pins["Pin001"] = CreatePin(new PinConfig("Pin001")
+            {
+                Description = "Gain 150 bonus Shield HP with all shields.",
+                PinSymbol = PinConfig.Symbol.Exclamation,
+                PinShape = PinConfig.Shape.Circle,
+                PinColor = PinConfig.Color.BilobaFlower,
+                EquipAction = (PlayerView view) =>
+                {
+                    view.xEntity.xBaseStats.iShieldMaxHP += 150;
+                },
+                UnequipAction = (PlayerView view) =>
+                {
+                    view.xEntity.xBaseStats.iShieldMaxHP -= 150;
+                }
+            });
+
+            CreateCommand("DropCustomPin", (_1, _2) =>
+            {
+                var pos = Globals.Game.xLocalPlayer.xEntity.xTransform.v2Pos;
+                Globals.Game._EntityMaster_AddWatcher(new Watchers.PinSpawned(GetPinID("Pin001"), pos, pos));
+            });
         }
 
         public override void PostArcadeRoomStart()
@@ -308,6 +365,14 @@ namespace Murio
             {
                 DoSpecialistCurseForRoomStart();
             }
+
+            if (CanDoHasteCurseLogic())
+            {
+                foreach (var enemy in Globals.Game.dixEnemyList.Values)
+                {
+                    DoHasteCurseForEnemy(enemy);
+                }
+            }
         }
 
         public override void PostArcadeGauntletEnemySpawned(Enemy enemy)
@@ -320,6 +385,11 @@ namespace Murio
             if (CanDoSpecialistCurseLogic())
             {
                 DoSpecialistCurseForGauntletEnemy(enemy);
+            }
+
+            if (CanDoHasteCurseLogic())
+            {
+                DoHasteCurseForEnemy(enemy);
             }
         }
 
@@ -455,6 +525,24 @@ namespace Murio
             RollForSpecialistAndSpawn(enemy, ref healSlots, ref drainSlots, ref chaosSlots);
         }
 
+        private void DoHasteCurseForEnemy(Enemy enemy)
+        {
+            List<EnemyCodex.EnemyTypes> moveSpeedBans = new List<EnemyCodex.EnemyTypes>()
+            {
+                EnemyCodex.EnemyTypes.Vilya
+            };
+
+            if (!moveSpeedBans.Contains(enemy.enType))
+            {
+                enemy.xBaseStats.AddPercentageMoveSpeedBuff(new BaseStats.BuffFloat(int.MaxValue, 1.25f));
+            }
+
+            foreach (var animation in enemy.xRenderComponent.dixAnimations.Values)
+            {
+                animation.fInnateTimeWarp *= 1.25f;
+            }
+        }
+
         private bool CanDoShieldCurseLogic()
         {
             var session = Globals.Game.xGameSessionData.xRogueLikeSession;
@@ -480,6 +568,18 @@ namespace Murio
             return rogueData.IsTreatCurseEquipped(Curses["Curse02"]) &&
                 NetUtils.IsLocalOrServer &&
                 coolRoom &&
+                !session.xCurrentRoom.bCompleted;
+        }
+        
+        private bool CanDoHasteCurseLogic()
+        {
+            var session = Globals.Game.xGameSessionData.xRogueLikeSession;
+
+            var rogueData = Globals.Game.xGlobalData.xLocalRoguelikeData;
+
+            // Non-player buffs have to be done on the client too
+
+            return rogueData.IsTreatCurseEquipped(Curses["Curse03"]) &&
                 !session.xCurrentRoom.bCompleted;
         }
 

@@ -9,11 +9,19 @@ namespace Murio
 {
     public class ChaosAbilitySpell : EnemyAbilitySpell
     {
-        public int ChaosDuration { get; set; } = 360;
+        public int IcePhase { get; } = 240;
 
-        public float SpawnCost { get; set; } = 40f;
+        public int SlimePhase { get; } = 240;
 
-        public int CalmDuration { get; set; } = 120;
+        public int BlindingGasPhase { get; } = 120;
+
+        public float IceCost { get; } = 20f;
+
+        public float SlimeCost { get; } = 30f;
+
+        public float BlindingGasCost { get; } = 12f;
+
+        public float SpawnCost { get; private set; } = 20f;
 
         public override void OnDestroy()
         {
@@ -64,22 +72,28 @@ namespace Murio
             {
                 if (_durationLeft <= 0)
                 {
-                    _inChaos = !_inChaos;
+                    _chaosMode = (_chaosMode + 1) % 3;
 
-                    _durationLeft = _inChaos ? ChaosDuration : CalmDuration;
+                    switch (_chaosMode)
+                    {
+                        case 0:
+                            _durationLeft = _startingDuration = SlimePhase;
+                            SpawnCost = SlimeCost;
+                            break;
+                        case 1:
+                            _durationLeft = _startingDuration = IcePhase;
+                            SpawnCost = IceCost;
+                            break;
+                        case 2:
+                            _durationLeft = _startingDuration = BlindingGasPhase;
+                            SpawnCost = BlindingGasCost;
+                            break;
+                    }
                 }
                 else
                 {
-                    if (_inChaos)
-                    {
-                        _points += Vector2.Distance(_lastPosition, Owner.xTransform.v2Pos) * 0.5f;
-                        _points += 0.4f;
-                    }
-                    else
-                    {
-                        _points -= 0.08f;
-                        _points = Math.Max(_points, 0);
-                    }
+                    _points += Vector2.Distance(_lastPosition, Owner.xTransform.v2Pos) * 0.5f;
+                    _points += 0.4f;
 
                     _lastPosition = Owner.xTransform.v2Pos;
                     _durationLeft--;
@@ -90,7 +104,7 @@ namespace Murio
 
                         if (NetUtils.IsLocalOrServer)
                         {
-                            SpawnChaos(_lastPosition, Globals.Game.randomInLogic.Next(0, 2));
+                            SpawnChaos(_chaosMode);
                         }
                     }
 
@@ -136,54 +150,58 @@ namespace Murio
 
         private Vector2 _lastPosition;
 
-        private bool _inChaos = false;
+        private int _chaosMode = -1;
 
-        private int _durationLeft = 60;
+        private int _durationLeft = 0;
+
+        private int _startingDuration = 360;
 
         private void StartSpell()
         {
-            CreateAbilityIcon(Color.Yellow);
+            CreateAbilityIcon();
 
             _lastPosition = Owner.xTransform.v2Pos;
         }
 
         private void UpdateEffects()
         {
-            Color toUse = Color.Yellow;
-
-            if (!_inChaos)
-            {
-                toUse.R = (byte)(toUse.R * 0.1f);
-                toUse.G = (byte)(toUse.G * 0.1f);
-                toUse.B = (byte)(toUse.B * 0.1f);
-            }
-
-            Color current = AbilityIcon.xRenderComponent.cColor;
-
-            Color newColor = new Color()
-            {
-                R = (byte)(current.R + (toUse.R - current.R) * 0.1f),
-                G = (byte)(current.G + (toUse.G - current.G) * 0.1f),
-                B = (byte)(current.B + (toUse.B - current.B) * 0.1f),
-                A = 255
-            };
-
-            AbilityIcon.xRenderComponent.cColor = newColor;
+            EditAbilityIcon(Color.Yellow, (20f + _startingDuration - _durationLeft) / _startingDuration);
         }
 
-        private void SpawnChaos(Vector2 position, int option)
+        private void SpawnChaos(int option)
         {
+            Vector2 position = default;
+            Random random = Globals.Game.randomInLogic;
+
             switch (option)
             {
                 case 0:
-                    InstructionsFromServer(0, position.X, position.Y, 0.6f, 180);
-                    SendClientInstruction(0, position.X, position.Y, 0.6f, 180);
+                    position = Owner.xTransform.v2Pos;
+
+                    InstructionsFromServer(0, position.X, position.Y, 0.6f, 240);
+                    SendClientInstruction(0, position.X, position.Y, 0.6f, 240);
                     break;
                 case 1:
-                    InstructionsFromServer(1, position.X, position.Y, 180);
-                    SendClientInstruction(1, position.X, position.Y, 180);
+                    position = Owner.xTransform.v2Pos + Utility.RandomizeVector2Direction(random) * (2f + 4f * (float)random.NextDouble());
+
+                    InstructionsFromServer(1, position.X, position.Y, 90);
+                    SendClientInstruction(1, position.X, position.Y, 90);
                     break;
                 case 2:
+                    Globals.Game._EntityMaster_AddWatcher(new DelayedCallbackWatcher(() =>
+                    {
+                        position = Owner.xTransform.v2Pos + Utility.RandomizeVector2Direction(random) * (4f + 6f * (float)random.NextDouble());
+
+                        _EnemySpells_GasCloud blind = Globals.Game._EntityMaster_AddSpellInstance(SpellCodex.SpellTypes._EnemySkill_GasCloud_Blind, Owner, position, true, 0f, 0f, 480, position.X, position.Y) as _EnemySpells_GasCloud;
+
+                        blind.iDestroyAt = 480;
+                        blind.xAttackPhasePlayer.lxCurrentColliders[0].ibitLayers = Owner.xCollisionComponent.ibitCurrentColliderLayer;
+                        blind.xRenderComponent.fVirtualHeight = xRenderComponent.fVirtualHeight;
+                        blind.afCloudParameters = new float[2] { 30f, 200f };
+                        blind.xAttackPhasePlayer.lxCurrentColliders[0].ibitLayers = Owner.xCollisionComponent.ibitCurrentColliderLayer;
+                        blind.xRenderComponent.fVirtualHeight = xRenderComponent.fVirtualHeight + 4f;
+                    }));
+
                     break;
                 case 3:
                     break;

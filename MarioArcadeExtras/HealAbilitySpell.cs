@@ -11,18 +11,19 @@ namespace Murio
 {
     public class HealAbilitySpell : EnemyAbilitySpell
     {
-        public int HealInterval { get; set; } = 180;
+        public int HealInterval { get; } = 150;
 
-        // How much the owner gets healed by
-        public float SelfHealStrength { get; set; } = 0.14f;
+        public float WoundHeal { get; } = 0.05f;
 
-        public float BossHealMultiplier { get; set; } = 0.1f;
+        public float BaseFlatHeal { get; } = 23;
 
-        public float AllyHealStrength { get; set; } = 0.18f;
+        public float FlatHealPerEnemyLevel { get; } = 6;
 
-        public float AllyHealRadius { get; set; } = 60;
+        public float AllyWoundHealPenalty { get; } = 0.75f;
 
-        public SortedAnimated RadiusIndicator { get; private set; }
+        public float BossWoundHealPenalty { get; } = 0.15f;
+
+        public float AllyHealRadius { get; } = 60;
 
         public override void Init(InMessage msg, params float[] p_afInitFloats)
         {
@@ -79,21 +80,13 @@ namespace Murio
 
                     foreach (Enemy enemy in nearbyEnemies)
                     {
-                        float usedRatio = HealEnemy(enemy, enemy == Owner ? SelfHealStrength : AllyHealStrength);
-
-                        _nextHealIn += (int)((enemy == Owner ? 240 : 40) * usedRatio) + 5;
+                        HealEnemy(enemy);
                     }
-
-                    _flashTotal = _nextHealIn;
-
-                    _flashState = _flashTotal;
                 }
                 else
                 {
                     _nextHealIn--;
                 }
-
-                _flashState = Math.Max(_flashState - 1, 0);
 
                 UpdateEffects();
             }
@@ -111,63 +104,45 @@ namespace Murio
 
         private int _nextHealIn = 120;
 
-        private int _flashState = 0;
-
-        private int _flashTotal = 90;
-
-        private int _flashTransitionTotal => (int)(_flashTotal * 0.75f);
-
-        private float HealEnemy(Enemy enemy, float healStrength)
+        private void HealEnemy(Enemy enemy)
         {
+            bool isSelf = enemy == Owner;
+
+            float woundRatio = WoundHeal * (isSelf ? 1f : AllyWoundHealPenalty);
+
+            float woundHeal = (int)((enemy.xBaseStats.iMaxHP - enemy.xBaseStats.iHP) * woundRatio);
+            float flatHeal = BaseFlatHeal + FlatHealPerEnemyLevel * enemy.xEnemyDescription.iLevel * (isSelf ? 1f : AllyWoundHealPenalty);
+
             if (enemy.xEnemyDescription.enCategory != EnemyDescription.Category.Regular)
-                healStrength *= BossHealMultiplier;
-
-            int wounds = enemy.xBaseStats.iMaxHP - enemy.xBaseStats.iHP;
-            int heal = (int)(enemy.xBaseStats.iMaxHP * healStrength);
-
-            int whatCanBeHealed = Math.Min(heal, wounds);
+            {
+                woundHeal *= BossWoundHealPenalty;
+                flatHeal *= BossWoundHealPenalty;
+            }
 
             if (NetUtils.IsLocalOrServer)
             {
-                Globals.Game._Enemy_Heal(enemy, whatCanBeHealed);
+                Globals.Game._Enemy_Heal(enemy, (int)(woundHeal + flatHeal));
             }
-
-            float healRatioUsed = whatCanBeHealed / (float)heal;
-
-            return healRatioUsed;
         }
 
         private void StartSpell()
         {
-            CreateAbilityIcon(Color.Red);
+            CreateAbilityIcon();
 
-            RadiusIndicator = new SortedAnimated(Vector2.Zero, SortedAnimated.SortedAnimatedEffects._SkillEffects_OneHand_SpiritSlash_AOE_Lv1);
+            CreateRadiusIndicator();
 
-            Globals.Game._EffectMaster_AddEffect(RadiusIndicator);
+            Owner.xBaseStats.bStunImmune = true;
+            Owner.xBaseStats.bSlowImmunity = true;
+            Owner.xBaseStats.enSize = BaseStats.BodySize.Titan;
 
-            RadiusIndicator.xRenderComponent.fVirtualHeight += Owner.xRenderComponent.fVirtualHeight;
-            RadiusIndicator.xRenderComponent.xTransform = Owner.xTransform;
-            RadiusIndicator.xTransform = Owner.xTransform;
+            Owner.xBaseStats.SetDefaulKnockbackResistance(5);
         }
 
         private void UpdateEffects()
         {
-            Color toUse = Color.Red;
+            EditAbilityIcon(Color.Red, (20f + HealInterval - _nextHealIn) / HealInterval);
 
-            if (_flashState >= _flashTransitionTotal)
-            {
-                toUse.R = 0;
-            }
-            else if (_flashTransitionTotal != 0)
-            {
-                toUse.R = (byte)(toUse.R * (_flashTransitionTotal - _flashState) / _flashTransitionTotal);
-            }
-
-            AbilityIcon.xRenderComponent.cColor = toUse;
-
-            RadiusIndicator.xRenderComponent.fAlpha = 0.18f;
-
-            RadiusIndicator.xRenderComponent.fScale = (float)AllyHealRadius / 55f; // 55 is the Spirit Slash AOE texture's radius
+            EditRadiusIndicator(Color.Red, 0.15f, 55f);
         }
 
         public static HealAbilitySpell SpellBuilder(int powerLevel, Level.WorldRegion worldRegion)
