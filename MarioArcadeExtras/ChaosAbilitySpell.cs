@@ -1,9 +1,8 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
 using SoG;
-using SoG.Modding.Core;
-using SoG.Modding.ModUtils;
-using SoG.Modding.API;
+using SoG.Modding;
+using SoG.Modding.Utils;
 
 namespace Murio
 {

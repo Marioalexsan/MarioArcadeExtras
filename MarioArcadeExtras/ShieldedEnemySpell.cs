@@ -1,15 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using SoG;
-using SoG.Modding.Core;
-using SoG.Modding.ModUtils;
+using SoG.Modding.Utils;
+using SoG.Modding;
 using Watchers;
-using SoG.Modding.API;
 
 namespace Murio
 {

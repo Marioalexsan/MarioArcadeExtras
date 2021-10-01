@@ -1,16 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Bagmen;
 using Microsoft.Xna.Framework;
 using SoG;
-using SoG.Modding.API;
-using SoG.Modding.API.Configs;
-using SoG.Modding.Core;
-using SoG.Modding.ModUtils;
+using SoG.Modding;
+using SoG.Modding.Configs;
+using SoG.Modding.Utils;
 
 namespace Murio
 {
@@ -28,12 +23,12 @@ namespace Murio
 
         private readonly List<EnemyCodex.EnemyTypes> abilityCurseBans;
 
-        public override string Name => "MarioArcadeExtras";
+        public override string NameID => "MarioArcadeExtras";
+
+        public override Version ModVersion => new Version("0.12");
 
         public ArcadeExtras()
         {
-            TheMod = this;
-
             shieldCurseBans = new List<EnemyCodex.EnemyTypes>()
             {
                 EnemyCodex.EnemyTypes.Lood_Gold,
@@ -115,6 +110,8 @@ namespace Murio
 
         public override void Load()
         {
+            TheMod = this;
+
             Logger.LogLevel = LogLevels.Debug;
 
             Perks["Perk01"] = CreatePerk(new PerkConfig("Perk01")
@@ -352,6 +349,11 @@ namespace Murio
                 var pos = Globals.Game.xLocalPlayer.xEntity.xTransform.v2Pos;
                 Globals.Game._EntityMaster_AddWatcher(new Watchers.PinSpawned(GetPinID("Pin001"), pos, pos));
             });
+        }
+
+        public override void Unload()
+        {
+            TheMod = null;
         }
 
         public override void PostArcadeRoomStart()
