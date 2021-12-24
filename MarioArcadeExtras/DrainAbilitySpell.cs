@@ -77,9 +77,9 @@ namespace Murio
                     {
                         BaseStats stats = player.xEntity.xBaseStats;
 
-                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffectID("DrainDebuff_ASPD"), new BaseStats.EBuffFloat(10, -12, EquipmentInfo.StatEnum.ASPD, true));
-                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffectID("DrainDebuff_CSPD"), new BaseStats.EBuffFloat(10, -24, EquipmentInfo.StatEnum.CSPD, true));
-                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffectID("DrainDebuff_EPReg"), new BaseStats.EBuffFloat(10, -65, EquipmentInfo.StatEnum.EPRegen, true));
+                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffect("DrainDebuff_ASPD").GameID, new BaseStats.EBuffFloat(10, -12, EquipmentInfo.StatEnum.ASPD, true));
+                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffect("DrainDebuff_CSPD").GameID, new BaseStats.EBuffFloat(10, -24, EquipmentInfo.StatEnum.CSPD, true));
+                        stats.AddStatusEffect(ArcadeExtras.TheMod.GetStatusEffect("DrainDebuff_EPReg").GameID, new BaseStats.EBuffFloat(10, -65, EquipmentInfo.StatEnum.EPRegen, true));
                         stats.AddPercentageMoveSpeedDeBuff(new BaseStats.BuffFloat(10, 0.7f));
                     }
                 } 

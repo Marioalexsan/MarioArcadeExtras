@@ -4,11 +4,14 @@ using Bagmen;
 using Microsoft.Xna.Framework;
 using SoG;
 using SoG.Modding;
-using SoG.Modding.Configs;
+using SoG.Modding.Addons;
+using SoG.Modding.Content;
 using SoG.Modding.Utils;
+using SoG.Modding.Extensions;
 
 namespace Murio
 {
+    [ModDependency("Addons.ModGoodies")]
     public class ArcadeExtras : Mod
     {
         internal static ArcadeExtras TheMod { get; private set; }
@@ -25,7 +28,7 @@ namespace Murio
 
         public override string NameID => "MarioArcadeExtras";
 
-        public override Version ModVersion => new Version("0.12");
+        public override Version ModVersion => new Version("0.16");
 
         public ArcadeExtras()
         {
@@ -58,296 +61,624 @@ namespace Murio
             };
         }
 
-        private Dictionary<string, RogueLikeMode.Perks> Perks = new Dictionary<string, RogueLikeMode.Perks>();
-
-        private Dictionary<string, RogueLikeMode.TreatsCurses> Curses = new Dictionary<string, RogueLikeMode.TreatsCurses>();
-
-        private Dictionary<string, SpellCodex.SpellTypes> Spells = new Dictionary<string, SpellCodex.SpellTypes>();
-
-        private Dictionary<string, BaseStats.StatusEffectSource> StatusEffects = new Dictionary<string, BaseStats.StatusEffectSource>();
-
-        private Dictionary<string, PinCodex.PinType> Pins = new Dictionary<string, PinCodex.PinType>();
-
-        public RogueLikeMode.Perks GetPerkID(string modID)
-        {
-            if (Perks.ContainsKey(modID))
-                return Perks[modID];
-
-            return RogueLikeMode.Perks.None;
-        }
-
-        public RogueLikeMode.TreatsCurses GetCurseID(string modID)
-        {
-            if (Curses.ContainsKey(modID))
-                return Curses[modID];
-
-            return RogueLikeMode.TreatsCurses.None;
-        }
-        
-        public SpellCodex.SpellTypes GetSpellID(string modID)
-        {
-            if (Spells.ContainsKey(modID))
-                return Spells[modID];
-
-            return SpellCodex.SpellTypes.NULL;
-        }
-        
-        public BaseStats.StatusEffectSource GetStatusEffectID(string modID)
-        {
-            if (StatusEffects.ContainsKey(modID))
-                return StatusEffects[modID];
-
-            return BaseStats.StatusEffectSource.SlowLv1;
-        }
-
-        public PinCodex.PinType GetPinID(string modID)
-        {
-            if (Pins.ContainsKey(modID))
-                return Pins[modID];
-
-            return PinCodex.PinType.EmptySlot;
-        }
-
         public override void Load()
         {
             TheMod = this;
 
             Logger.LogLevel = LogLevels.Debug;
 
-            Perks["Perk01"] = CreatePerk(new PerkConfig("Perk01")
+            SetupPerks();
+
+            SetupCurses();
+
+            SetupPins();
+
+            SpellEntry spell;
+
+            spell = CreateSpell("Spell001");
+
+            spell.Builder = ShieldedEnemySpell.SpellBuilder;
+
+            spell = CreateSpell("Spell002");
+
+            spell.Builder = HealAbilitySpell.SpellBuilder;
+
+            spell = CreateSpell("Spell003");
+
+            spell.Builder = DrainAbilitySpell.SpellBuilder;
+
+            spell = CreateSpell("Spell004");
+
+            spell.Builder = ChaosAbilitySpell.SpellBuilder;
+
+            StatusEffectEntry status;
+
+            status = CreateStatusEffect("DrainDebuff_ASPD");
+            status = CreateStatusEffect("DrainDebuff_CSPD");
+            status = CreateStatusEffect("DrainDebuff_EPReg");
+
+            CommandEntry commands = CreateCommands();
+
+            commands.SetCommand("DropCustomPin", (_1, _2) =>
             {
-                Name = "Soul Booster",
-                Description = "Start the run with 10 more MaxEP. Cast again, and again, and again!",
-                EssenceCost = 25,
-                RunStartActivator = (player) =>
+                var pos = Globals.Game.xLocalPlayer.xEntity.xTransform.v2Pos;
+                Globals.Game._EntityMaster_AddWatcher(new Watchers.PinSpawned(GetPin("Pin001").GameID, pos, pos));
+            });
+        }
+
+        private void SetupPerks()
+        {
+            PerkEntry perk;
+
+            perk = CreatePerk("Perk01");
+
+            perk.Name = "Soul Booster";
+            perk.Description = "Start the run with 10 more MaxEP. Cast again, and again, and again!";
+            perk.EssenceCost = 25;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xEntity.xBaseStats.iMaxEP += 10;
+                player.xEntity.xBaseStats._ichkBaseMaxEP += 10 * 2;
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/SoulBooster";
+
+            perk = CreatePerk("Perk02");
+
+            perk.Name = "Talented Start";
+            perk.Description = "Start the run with a pair of bal- I mean 2 bonus Talent Points.";
+            perk.EssenceCost = 50;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xViewStats.iTalentPoints += 2;
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/TalentedStart";
+
+            perk = CreatePerk("Perk03");
+
+            perk.Name = "Speedy Start";
+            perk.Description = "Start the run with a Swift Ring. Wait, why do mages get the most stats?!";
+            perk.EssenceCost = 30;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Ring01Yellow, 1);
+                Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Ring01Yellow, player, bSend: true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/SpeedyStart";
+
+            perk = CreatePerk("Perk04");
+
+            perk.Name = "Arcane Start";
+            perk.Description = "Start the run with a Smart Ring. Or was it called Nuke 'n' Destroy Ring MK1?";
+            perk.EssenceCost = 30;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Ring01Blue, 1);
+                Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Ring01Blue, player, bSend: true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/ArcaneStart";
+
+            perk = CreatePerk("Perk05");
+
+            perk.Name = "Brawny Start";
+            perk.Description = "Start the run with a Strong Ring. Also known as Big Bamage Ring.";
+            perk.EssenceCost = 30;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Ring01Red, 1);
+                Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Ring01Red, player, bSend: true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/BrawnyStart";
+
+            perk = CreatePerk("Perk06");
+
+            perk.Name = "Lucky Start";
+            perk.Description = "Start the run with a Rabbit's Foot. Rabby not included!";
+            perk.EssenceCost = 40;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_RabbitsFoot, 1);
+                Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_RabbitsFoot, player, bSend: true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/LuckyStart";
+
+            perk = CreatePerk("Perk07");
+
+            perk.Name = "Slimy Start";
+            perk.Description = "Start the run with a Slimy Ring. Still a better love story than Twilight...";
+            perk.EssenceCost = 40;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_SlimeRing, 1);
+                Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_SlimeRing, player, bSend: true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/SlimyStart";
+
+            perk = CreatePerk("Perk08");
+
+            perk.Name = "Charged Start";
+            perk.Description = "Start the run with a Soul Amulet. You won't need Focus this time around!";
+            perk.EssenceCost = 40;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Amulet01Blue, 1);
+                Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Amulet01Blue, player, bSend: true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/ChargedStart";
+
+            perk = CreatePerk("Perk09");
+
+            perk.Name = "Extra Medicine";
+            perk.Description = "Start the run with two Health Potions. Use them wisely!";
+            perk.EssenceCost = 50;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Consumable_HealthPotion, 2);
+                Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Consumable_HealthPotion, player, true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/ExtraMedicine";
+
+            perk = CreatePerk("Perk10");
+
+            perk.Name = "Sniper Elite";
+            perk.Description = "Start the run with the Compound Bow. Snipe away!";
+            perk.EssenceCost = 55;
+            perk.RunStartActivator = (player) =>
+            {
+                Globals.Game._Player_SwitchBow(player, 2, true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/SniperElite";
+
+            perk = CreatePerk("Perk11");
+
+            perk.Name = "Rubick's Curse";
+            perk.Description = "Start the run with 40 more MaxEP, but your MaxHP is reduced to 50%, and you lose 30 EP Regen. Ready for a challenge?";
+            perk.EssenceCost = 50;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xEntity.xBaseStats.iEPRegenMultiplierInPCT -= 30;
+                player.xEntity.xBaseStats.iMaxEP += 40;
+                player.xEntity.xBaseStats._ichkBaseEP += 40 * 2;
+
+                int previous = player.xEntity.xBaseStats.iHP;
+                player.xEntity.xBaseStats.fMaxHPMultiplier -= 0.5f;
+                player.xEntity.xBaseStats.iHP = player.xEntity.xBaseStats.iMaxHP;
+                player.xEntity.xBaseStats._ichkHPBalance += player.xEntity.xBaseStats.iHP - previous;
+
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/RubickCurse";
+
+            perk = CreatePerk("Perk12");
+
+            perk.Name = "Pandemic Kid";
+            perk.Description = "Start the run with the Gas Mask, which is totally not going to make Mt. Bloom a cakewalk.";
+            perk.EssenceCost = 50;
+            perk.RunStartActivator = (player) =>
+            {
+                player.xInventory.AddItem(ItemCodex.ItemTypes._Facegear_GasMask, 1);
+                Globals.Game._Item_Equipped(ItemCodex.ItemTypes._Facegear_GasMask, player, true);
+            };
+            perk.TexturePath = AssetPath + "RogueLike/Perks/PandemicKid";
+
+        }
+
+        private void SetupCurses()
+        {
+            CurseEntry curse;
+
+            curse = CreateCurse("Curse01");
+
+            curse.Name = "START Treaty";
+            curse.Description = "Most enemies spawn with a shield. Shields deactivate after a delay.";
+            curse.IsCurse = true;
+            curse.ScoreModifier = 0.25f;
+            curse.TexturePath = AssetPath + "RogueLike/Curses/STARTTreaty";
+
+            curse = CreateCurse("Curse02");
+
+            curse.Name = "Specialists";
+            curse.Description = "Some enemies gain special abilities.";
+            curse.IsCurse = true;
+            curse.ScoreModifier = 0.20f;
+            curse.TexturePath = AssetPath + "RogueLike/Curses/Specialists";
+
+            curse = CreateCurse("Curse03");
+
+            curse.Name = "Game Over Speedrun";
+            curse.Description = "Most enemies move and attack faster.";
+            curse.IsCurse = true;
+            curse.ScoreModifier = 0.30f;
+            curse.TexturePath = AssetPath + "RogueLike/Curses/HasteCurse";
+        }
+
+        private void SetupPins()
+        {
+            ModGoodies addon = GetMod("Addons.ModGoodies") as ModGoodies;
+
+            PinEntry pin;
+
+            pin = CreatePin("Pin001");
+
+            pin.Description = "Gain 150 bonus Shield HP with all shields.";
+            pin.PinSymbol = PinEntry.Symbol.Shield;
+            pin.PinShape = PinEntry.Shape.Circle;
+            pin.PinColor = PinEntry.Color.BilobaFlower;
+            pin.EquipAction = (PlayerView view) =>
+            {
+                view.xEntity.xBaseStats.iShieldMaxHP += 150;
+            };
+            pin.UnequipAction = (PlayerView view) =>
+            {
+                view.xEntity.xBaseStats.iShieldMaxHP -= 150;
+            };
+
+            pin = CreatePin("Pin002");
+
+            pin.Description = "Gain 1 Bonus Level in all General Talents.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Circle;
+            pin.PinColor = PinEntry.Color.Coral;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin002").GameID))
                 {
-                    player.xEntity.xBaseStats.iMaxEP += 10;
-                    player.xEntity.xBaseStats._ichkBaseMaxEP += 10 * 2;
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/SoulBooster"
-            });
+                    return;
+                }
 
-            Perks["Perk02"] = CreatePerk(new PerkConfig("Perk02")
-            {
-                Name = "Talented Start",
-                Description = "Start the run with a pair of bal- I mean 2 bonus Talent Points.",
-                EssenceCost = 50,
-                RunStartActivator = (player) =>
+                if (skill.IsGeneralTalent())
                 {
-                    player.xViewStats.iTalentPoints += 2;
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/TalentedStart"
-            });
-
-            Perks["Perk03"] = CreatePerk(new PerkConfig("Perk03")
-            {
-                Name = "Speedy Start",
-                Description = "Start the run with a Swift Ring. Wait, why do mages get the most stats?!",
-                EssenceCost = 30,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Ring01Yellow, 1);
-                    Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Ring01Yellow, player, bSend: true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/SpeedyStart"
-            });
-
-            Perks["Perk04"] = CreatePerk(new PerkConfig("Perk04")
-            {
-                Name = "Arcane Start",
-                Description = "Start the run with a Smart Ring. Or was it called Nuke 'n' Destroy Ring MK1?",
-                EssenceCost = 30,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Ring01Blue, 1);
-                    Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Ring01Blue, player, bSend: true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/ArcaneStart"
-            });
-
-            Perks["Perk05"] = CreatePerk(new PerkConfig("Perk05")
-            {
-                Name = "Brawny Start",
-                Description = "Start the run with a Strong Ring. Also known as Big Bamage Ring.",
-                EssenceCost = 30,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Ring01Red, 1);
-                    Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Ring01Red, player, bSend: true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/BrawnyStart"
-            });
-
-            Perks["Perk06"] = CreatePerk(new PerkConfig("Perk06")
-            {
-                Name = "Lucky Start",
-                Description = "Start the run with a Rabbit's Foot. Rabby not included!",
-                EssenceCost = 40,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_RabbitsFoot, 1);
-                    Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_RabbitsFoot, player, bSend: true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/LuckyStart"
-            });
-
-            Perks["Perk07"] = CreatePerk(new PerkConfig("Perk07")
-            {
-                Name = "Slimy Start",
-                Description = "Start the run with a Slimy Ring. Still a better love story than Twilight...",
-                EssenceCost = 40,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_SlimeRing, 1);
-                    Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_SlimeRing, player, bSend: true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/SlimyStart"
-            });
-
-            Perks["Perk08"] = CreatePerk(new PerkConfig("Perk08")
-            {
-                Name = "Charged Start",
-                Description = "Start the run with a Soul Amulet. You won't need Focus this time around!",
-                EssenceCost = 40,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Accessory_Amulet01Blue, 1);
-                    Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Accessory_Amulet01Blue, player, bSend: true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/ChargedStart"
-            });
-
-            Perks["Perk09"] = CreatePerk(new PerkConfig("Perk09")
-            {
-                Name = "Extra Medicine",
-                Description = "Start the run with two Health Potions. Use them wisely!",
-                EssenceCost = 50,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Consumable_HealthPotion, 2);
-                    Globals.Game._Item_AutoEquip(ItemCodex.ItemTypes._Consumable_HealthPotion, player, true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/ExtraMedicine"
-            });
-
-            Perks["Perk10"] = CreatePerk(new PerkConfig("Perk10")
-            {
-                Name = "Sniper Elite",
-                Description = "Start the run with the Compound Bow. Snipe away!",
-                EssenceCost = 55,
-                RunStartActivator = (player) =>
-                {
-                    Globals.Game._Player_SwitchBow(player, 2, true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/SniperElite"
-            });
-
-            Perks["Perk11"] = CreatePerk(new PerkConfig("Perk11")
-            {
-                Name = "Rubick's Curse",
-                Description = "Start the run with 40 more MaxEP, but your MaxHP is reduced to 50%, and you lose 30 EP Regen. Ready for a challenge?",
-                EssenceCost = 50,
-                RunStartActivator = (player) =>
-                {
-                    player.xEntity.xBaseStats.iEPRegenMultiplierInPCT -= 30;
-                    player.xEntity.xBaseStats.iMaxEP += 40;
-                    player.xEntity.xBaseStats._ichkBaseEP += 40 * 2;
-
-                    int previous = player.xEntity.xBaseStats.iHP;
-                    player.xEntity.xBaseStats.fMaxHPMultiplier -= 0.5f;
-                    player.xEntity.xBaseStats.iHP = player.xEntity.xBaseStats.iMaxHP;
-                    player.xEntity.xBaseStats._ichkHPBalance += player.xEntity.xBaseStats.iHP - previous;
-
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/RubickCurse"
-            });
-
-            Perks["Perk12"] = CreatePerk(new PerkConfig("Perk12")
-            {
-                Name = "Pandemic Kid",
-                Description = "Start the run with the Gas Mask, which is totally not going to make Mt. Bloom a cakewalk.",
-                EssenceCost = 50,
-                RunStartActivator = (player) =>
-                {
-                    player.xInventory.AddItem(ItemCodex.ItemTypes._Facegear_GasMask, 1);
-                    Globals.Game._Item_Equipped(ItemCodex.ItemTypes._Facegear_GasMask, player, true);
-                },
-                TexturePath = AssetPath + "RogueLike/Perks/PandemicKid"
-            });
-
-            Curses["Curse01"] = CreateTreatOrCurse(new TreatCurseConfig("Curse01")
-            {
-                Name = "START Treaty",
-                Description = "Most enemies spawn with a shield. Shields deactivate after a delay.",
-                IsCurse = true,
-                ScoreModifier = 0.25f,
-                TexturePath = AssetPath + "RogueLike/Curses/STARTTreaty"
-            });
-
-            Curses["Curse02"] = CreateTreatOrCurse(new TreatCurseConfig("Curse02")
-            {
-                Name = "Specialists",
-                Description = "Some enemies gain special abilities.",
-                IsCurse = true,
-                ScoreModifier = 0.20f,
-                TexturePath = AssetPath + "RogueLike/Curses/Specialists"
-            });
-            
-            Curses["Curse03"] = CreateTreatOrCurse(new TreatCurseConfig("Curse03")
-            {
-                Name = "Game Over Speedrun",
-                Description = "Most enemies move and attack faster.",
-                IsCurse = true,
-                ScoreModifier = 0.30f,
-                TexturePath = AssetPath + "RogueLike/Curses/HasteCurse"
-            });
-
-            Spells["Spell001"] = CreateSpell(new SpellConfig("Spell001")
-            {
-                Builder = ShieldedEnemySpell.SpellBuilder
-            });
-
-            Spells["Spell002"] = CreateSpell(new SpellConfig("Spell002")
-            {
-                Builder = HealAbilitySpell.SpellBuilder
-            });
-
-            Spells["Spell003"] = CreateSpell(new SpellConfig("Spell003")
-            {
-                Builder = DrainAbilitySpell.SpellBuilder
-            });
-
-            Spells["Spell004"] = CreateSpell(new SpellConfig("Spell004")
-            {
-                Builder = ChaosAbilitySpell.SpellBuilder
-            });
-
-            StatusEffects["DrainDebuff_ASPD"] = CreateStatusEffect(new StatusEffectConfig("DrainDebuff_ASPD"));
-
-            StatusEffects["DrainDebuff_CSPD"] = CreateStatusEffect(new StatusEffectConfig("DrainDebuff_CSPD"));
-
-            StatusEffects["DrainDebuff_EPReg"] = CreateStatusEffect(new StatusEffectConfig("DrainDebuff_EPReg"));
-
-            Pins["Pin001"] = CreatePin(new PinConfig("Pin001")
-            {
-                Description = "Gain 150 bonus Shield HP with all shields.",
-                PinSymbol = PinConfig.Symbol.Exclamation,
-                PinShape = PinConfig.Shape.Circle,
-                PinColor = PinConfig.Color.BilobaFlower,
-                EquipAction = (PlayerView view) =>
-                {
-                    view.xEntity.xBaseStats.iShieldMaxHP += 150;
-                },
-                UnequipAction = (PlayerView view) =>
-                {
-                    view.xEntity.xBaseStats.iShieldMaxHP -= 150;
+                    modified += 1;
                 }
             });
 
-            CreateCommand("DropCustomPin", (_1, _2) =>
+            pin = CreatePin("Pin003");
+
+            pin.Description = "Gain 1 Bonus Level in all Melee Talents.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Diamond;
+            pin.PinColor = PinEntry.Color.Coral;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
             {
-                var pos = Globals.Game.xLocalPlayer.xEntity.xTransform.v2Pos;
-                Globals.Game._EntityMaster_AddWatcher(new Watchers.PinSpawned(GetPinID("Pin001"), pos, pos));
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin003").GameID))
+                {
+                    return;
+                }
+
+                if (skill.IsMeleeTalent())
+                {
+                    modified += 1;
+                }
+            });
+
+            pin = CreatePin("Pin004");
+
+            pin.Description = "Gain 1 Bonus Level in all Magic Talents.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Plus;
+            pin.PinColor = PinEntry.Color.Coral;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin004").GameID))
+                {
+                    return;
+                }
+
+                if (skill.IsMagicTalent())
+                {
+                    modified += 1;
+                }
+            });
+
+            pin = CreatePin("Pin005");
+
+            pin.Description = "Gain 2 Bonus Levels in Last Stand, Last Breath and Last Spark.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Square;
+            pin.PinColor = PinEntry.Color.Coral;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin005").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_LastStand || skill == SpellCodex.SpellTypes._Talent_LastBreath || skill == SpellCodex.SpellTypes._Talent_LastSpark)
+                {
+                    modified += 2;
+                }
+            });
+
+            pin = CreatePin("Pin006");
+
+            pin.Description = "Gain 2 Bonus Levels in Second Wind, Kinetic Energy and Soul Eater.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Tablet;
+            pin.PinColor = PinEntry.Color.Coral;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin006").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_SecondWind || skill == SpellCodex.SpellTypes._Talent_General_KineticEnergy || skill == SpellCodex.SpellTypes._Talent_Magic_SoulEater)
+                {
+                    modified += 2;
+                }
+            });
+
+            pin = CreatePin("Pin007");
+
+            pin.Description = "Gain 2 Bonus Levels in Burning Weapon, Chilling Touch and Crippling Blast.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Circle;
+            pin.PinColor = PinEntry.Color.Conifer;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin007").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_BurningWeapon || skill == SpellCodex.SpellTypes._Talent_ChillyTouch || skill == SpellCodex.SpellTypes._Talent_General_KineticEnergy)
+                {
+                    modified += 2;
+                }
+            });
+
+            pin = CreatePin("Pin008");
+
+            pin.Description = "Gain 2 Bonus Levels in Wit, Battle Mage and Knowledge is Power.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Diamond;
+            pin.PinColor = PinEntry.Color.Conifer;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin008").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_Wit || skill == SpellCodex.SpellTypes._Talent_Battlemage || skill == SpellCodex.SpellTypes._Talent_Melee_KnowledgeIsPower)
+                {
+                    modified += 2;
+                }
+            });
+
+            pin = CreatePin("Pin009");
+
+            pin.Description = "Gain 3 Bonus Levels in Got You Covered, and 2 in Utility Flow.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Plus;
+            pin.PinColor = PinEntry.Color.Conifer;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin009").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_General_GotYouCovered)
+                {
+                    modified += 3;
+                }
+                else if (skill == SpellCodex.SpellTypes._Talent_General_UtilityFlow)
+                {
+                    modified += 2;
+                }
+            });
+
+
+
+            pin = CreatePin("Pin010");
+
+            pin.Description = "Gain 3 Bonus Levels in Sudden Strike, and 2 in Combo Starter.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Square;
+            pin.PinColor = PinEntry.Color.Conifer;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin010").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_Melee_SuddenStrike)
+                {
+                    modified += 3;
+                }
+                else if (skill == SpellCodex.SpellTypes._Talent_Melee_ComboStarter)
+                {
+                    modified += 2;
+                }
+            });
+
+
+            pin = CreatePin("Pin011");
+
+            pin.Description = "Gain 3 Bonus Levels in Backhander, and 2 in Bloodthirst.";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Tablet;
+            pin.PinColor = PinEntry.Color.Conifer;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin011").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_Backhander)
+                {
+                    modified += 3;
+                }
+                else if (skill == SpellCodex.SpellTypes._Talent_Melee_BloodThirst)
+                {
+                    modified += 2;
+                }
+            });
+
+            pin = CreatePin("Pin012");
+
+            pin.Description = "Gain 4 Bonus Levels in Manaburn. (Sticky)";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Circle;
+            pin.PinColor = PinEntry.Color.BilobaFlower;
+            pin.IsSticky = true;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin012").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_Manaburn)
+                {
+                    modified += 4;
+                }
+            });
+
+            pin = CreatePin("Pin013");
+
+            pin.Description = "Gain 4 Bonus Levels in Riposte. (Sticky)";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Diamond;
+            pin.PinColor = PinEntry.Color.BilobaFlower;
+            pin.IsSticky = true;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin013").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_Melee_Riposte)
+                {
+                    modified += 4;
+                }
+            });
+
+            pin = CreatePin("Pin014");
+
+            pin.Description = "Gain 4 Bonus Levels in Fine Taste. (Sticky)";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Plus;
+            pin.PinColor = PinEntry.Color.BilobaFlower;
+            pin.IsSticky = true;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin014").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_FineTaste)
+                {
+                    modified += 4;
+                }
+            });
+
+
+            pin = CreatePin("Pin015");
+
+            pin.Description = "Gain 6 Bonus Levels in Wand Master. (Sticky)";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Square;
+            pin.PinColor = PinEntry.Color.BilobaFlower;
+            pin.IsSticky = true;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin015").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_Magic_WandMaster)
+                {
+                    modified += 6;
+                }
+            });
+
+            pin = CreatePin("Pin016");
+
+            pin.Description = "Gain 5 Bonus Levels in Lady Luck. All other talents lose a level (but can't go below 0).";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Circle;
+            pin.PinColor = PinEntry.Color.Seagull;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin016").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_General_LadyLuck)
+                {
+                    modified += 5;
+                }
+                else
+                {
+                    modified -= 1;
+                }
+            });
+
+            pin = CreatePin("Pin017");
+
+            pin.Description = "Gain 5 Bonus Levels in Multitasking, and 3 in Shield Bearer. All other talents lose a level (but can't go below 0).";
+            pin.PinSymbol = PinEntry.Symbol.Star;
+            pin.PinShape = PinEntry.Shape.Diamond;
+            pin.PinColor = PinEntry.Color.Seagull;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin017").GameID))
+                {
+                    return;
+                }
+
+                if (skill == SpellCodex.SpellTypes._Talent_Multitasking)
+                {
+                    modified += 5;
+                }
+                else if (skill == SpellCodex.SpellTypes._Talent_ShieldBearer)
+                {
+                    modified += 3;
+                }
+                else
+                {
+                    modified -= 1;
+                }
+            });
+
+            pin = CreatePin("Pin018");
+
+            pin.Description = "Gain 1 Bonus Level for ALL talents. (Sticky)";
+            pin.PinSymbol = PinEntry.Symbol.Exclamation;
+            pin.PinShape = PinEntry.Shape.Plus;
+            pin.PinColor = PinEntry.Color.Seagull;
+            pin.IsSticky = true;
+
+            addon.AddSkillEditCallback((SpellCodex.SpellTypes skill, byte original, ref int modified) =>
+            {
+                if (!skill.IsTalent() || !Globals.Game.xLocalPlayer.xEquipment.HasBadge(GetPin("Pin018").GameID))
+                {
+                    return;
+                }
+
+                modified += 1;
             });
         }
 
@@ -443,7 +774,7 @@ namespace Murio
                 int duration = startDelay + delayIncrease * delayTier;
                 int killTimeReduction = 20;
 
-                ShieldedEnemySpell spell = (ShieldedEnemySpell)Globals.Game._EntityMaster_AddSpellInstance(GetSpellID("Spell001"), enemy, Vector2.Zero, false, duration, killTimeReduction);
+                ShieldedEnemySpell spell = (ShieldedEnemySpell)Globals.Game._EntityMaster_AddSpellInstance(GetSpell("Spell001").GameID, enemy, Vector2.Zero, false, duration, killTimeReduction);
                 
                 spell.Init(null, duration, killTimeReduction);
 
@@ -465,7 +796,7 @@ namespace Murio
             int duration = 90 + (Globals.Game.randomInLogic.Next() % 45);
             int killTimeReduction = 0;
 
-            ShieldedEnemySpell spell = (ShieldedEnemySpell)Globals.Game._EntityMaster_AddSpellInstance(GetSpellID("Spell001"), enemy, Vector2.Zero, false, duration, killTimeReduction);
+            ShieldedEnemySpell spell = (ShieldedEnemySpell)Globals.Game._EntityMaster_AddSpellInstance(GetSpell("Spell001").GameID, enemy, Vector2.Zero, false, duration, killTimeReduction);
 
             spell.Init(null, duration, killTimeReduction);
 
@@ -545,15 +876,27 @@ namespace Murio
             }
         }
 
+        private bool IsInArcadeRun()
+        {
+            return
+                Globals.Game.xStateMaster.enGameMode == StateMaster.GameModes.RogueLike &&
+                Globals.Game.xGameSessionData.xRogueLikeSession.bInRun;
+        }
+
         private bool CanDoShieldCurseLogic()
         {
+            if (!IsInArcadeRun())
+            {
+                return false;
+            }
+
             var session = Globals.Game.xGameSessionData.xRogueLikeSession;
 
             var rogueData = Globals.Game.xGlobalData.xLocalRoguelikeData;
 
             bool coolRoom = session.xCurrentRoom.enRoomType == RogueLikeMode.Room.RoomTypes.Normal || session.xCurrentRoom.enRoomType == RogueLikeMode.Room.RoomTypes.Boss;
 
-            return rogueData.IsTreatCurseEquipped(Curses["Curse01"]) &&
+            return rogueData.IsTreatCurseEquipped(GetCurse("Curse01").GameID) &&
                 NetUtils.IsLocalOrServer &&
                 coolRoom &&
                 !session.xCurrentRoom.bCompleted;
@@ -561,13 +904,18 @@ namespace Murio
 
         private bool CanDoSpecialistCurseLogic()
         {
+            if (!IsInArcadeRun())
+            {
+                return false;
+            }
+
             var session = Globals.Game.xGameSessionData.xRogueLikeSession;
 
             var rogueData = Globals.Game.xGlobalData.xLocalRoguelikeData;
 
             bool coolRoom = session.xCurrentRoom.enRoomType == RogueLikeMode.Room.RoomTypes.Normal;
 
-            return rogueData.IsTreatCurseEquipped(Curses["Curse02"]) &&
+            return rogueData.IsTreatCurseEquipped(GetCurse("Curse02").GameID) &&
                 NetUtils.IsLocalOrServer &&
                 coolRoom &&
                 !session.xCurrentRoom.bCompleted;
@@ -575,13 +923,18 @@ namespace Murio
         
         private bool CanDoHasteCurseLogic()
         {
+            if (!IsInArcadeRun())
+            {
+                return false;
+            }
+
             var session = Globals.Game.xGameSessionData.xRogueLikeSession;
 
             var rogueData = Globals.Game.xGlobalData.xLocalRoguelikeData;
 
             // Non-player buffs have to be done on the client too
 
-            return rogueData.IsTreatCurseEquipped(Curses["Curse03"]) &&
+            return rogueData.IsTreatCurseEquipped(GetCurse("Curse03").GameID) &&
                 !session.xCurrentRoom.bCompleted;
         }
 
@@ -598,7 +951,7 @@ namespace Murio
 
             if (healSlots > 0 && next < edge)
             {
-                var spell = Globals.Game._EntityMaster_AddSpellInstance(GetSpellID("Spell002"), enemy, Vector2.Zero, false);
+                var spell = Globals.Game._EntityMaster_AddSpellInstance(GetSpell("Spell002").GameID, enemy, Vector2.Zero, false);
 
                 spell.Init(null);
 
@@ -620,7 +973,7 @@ namespace Murio
 
             if (drainSlots > 0 && next < edge)
             {
-                var spell = Globals.Game._EntityMaster_AddSpellInstance(GetSpellID("Spell003"), enemy, Vector2.Zero, false);
+                var spell = Globals.Game._EntityMaster_AddSpellInstance(GetSpell("Spell003").GameID, enemy, Vector2.Zero, false);
 
                 spell.Init(null);
 
@@ -642,7 +995,7 @@ namespace Murio
 
             if (chaosSlots > 0 && next < edge)
             {
-                var spell = Globals.Game._EntityMaster_AddSpellInstance(GetSpellID("Spell004"), enemy, Vector2.Zero, false);
+                var spell = Globals.Game._EntityMaster_AddSpellInstance(GetSpell("Spell004").GameID, enemy, Vector2.Zero, false);
                 
                 spell.Init(null);
 

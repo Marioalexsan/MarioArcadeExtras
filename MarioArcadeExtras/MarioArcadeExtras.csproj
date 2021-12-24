@@ -50,13 +50,17 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="GrindScript">
-      <HintPath>..\..\SoG-Modding-v2\BuildAPI\Debug\GrindScript.dll</HintPath>
+      <HintPath>..\..\GrindScript\build\x86\Debug\net472\GrindScript.dll</HintPath>
     </Reference>
     <Reference Include="Lidgren.Network, Version=2012.1.7.0, Culture=neutral, PublicKeyToken=null" />
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553" />
     <Reference Include="Microsoft.Xna.Framework.Game, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553" />
-    <Reference Include="Secrets Of Grindea">
-      <HintPath>..\..\SoG-Modding-v2\VanillaDependencies\Secrets Of Grindea.exe</HintPath>
+    <Reference Include="ModGoodies">
+      <HintPath>..\..\GrindScript\build\x86\Debug\net472\ModGoodies.dll</HintPath>
+    </Reference>
+    <Reference Include="Secrets Of Grindea, Version=1.0.0.0, Culture=neutral, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\vanilla\Secrets Of Grindea.exe</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -78,4 +82,7 @@
     <Compile Include="EnemyAbilitySpell.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>call "$(SolutionDir)copy_files_to_steam_dir.bat" $(SolutionDir)</PostBuildEvent>
+  </PropertyGroup>
 </Project>
